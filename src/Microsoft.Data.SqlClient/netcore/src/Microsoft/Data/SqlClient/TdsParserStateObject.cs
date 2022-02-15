@@ -20,7 +20,7 @@ namespace Microsoft.Data.SqlClient
         internal long _value;
     }
 
-    internal abstract class TdsParserStateObject
+    internal abstract partial class TdsParserStateObject
     {
         private static int _objectTypeCount; // EventSource counter
         internal readonly int _objectID = Interlocked.Increment(ref _objectTypeCount);
@@ -2163,7 +2163,16 @@ namespace Microsoft.Data.SqlClient
                 return true;
             }
 
-            ReadSni(new TaskCompletionSource<object>());
+            bool result = false;
+
+            if (Experimental)
+            {
+                result = TryReadSni(new TaskCompletionSource<object>());
+            }
+            else
+            {
+                ReadSni(new TaskCompletionSource<object>());
+            }
 
 #if DEBUG
             if (_failAsyncPends)
@@ -2177,7 +2186,7 @@ namespace Microsoft.Data.SqlClient
 #endif
             Debug.Assert((_snapshot != null) ^ _asyncReadWithoutSnapshot, "Must have either _snapshot set up or _asyncReadWithoutSnapshot enabled (but not both) to pend a read");
 
-            return false;
+            return result;
         }
 
         internal void PrepareReplaySnapshot()

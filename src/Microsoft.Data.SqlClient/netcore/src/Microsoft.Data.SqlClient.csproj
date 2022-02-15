@@ -911,6 +911,10 @@
     <Reference Include="System.Memory" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Microsoft\Data\SqlClient\SqlDataReaderExperimental.cs" />
+    <Compile Include="Microsoft\Data\SqlClient\TdsParserStateObjectExperimental.cs" />
+  </ItemGroup>
+  <ItemGroup>
     <EmbeddedResource Include="Resources\Microsoft.Data.SqlClient.SqlMetaData.xml">
       <LogicalName>Microsoft.Data.SqlClient.SqlMetaData.xml</LogicalName>
     </EmbeddedResource>
