@@ -5561,6 +5561,11 @@ namespace Microsoft.Data.SqlClient
 
         private bool TryReadSqlStringValue(SqlBuffer value, byte type, int length, Encoding encoding, bool isPlp, TdsParserStateObject stateObj)
         {
+            if (SqlDataReader.Experimental_TdsParserStateObject_EnsureEnoughDataForPlp)
+            {
+                return TryReadSqlStringValueExperimental(value, type, length, encoding, isPlp, stateObj);
+            }
+
             switch (type)
             {
                 case TdsEnums.SQLCHAR:

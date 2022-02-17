@@ -912,6 +912,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Microsoft\Data\SqlClient\SqlDataReaderExperimental.cs" />
+    <Compile Include="Microsoft\Data\SqlClient\TdsParserExperimental.cs" />
     <Compile Include="Microsoft\Data\SqlClient\TdsParserStateObjectExperimental.cs" />
   </ItemGroup>
   <ItemGroup>

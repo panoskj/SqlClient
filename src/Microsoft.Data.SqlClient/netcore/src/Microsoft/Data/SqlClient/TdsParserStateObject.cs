@@ -2165,7 +2165,7 @@ namespace Microsoft.Data.SqlClient
 
             bool result = false;
 
-            if (Experimental)
+            if (SqlDataReader.Experimental_TdsParserObject_TryReadSni)
             {
                 result = TryReadSni(new TaskCompletionSource<object>());
             }
@@ -4087,7 +4087,7 @@ namespace Microsoft.Data.SqlClient
             }
         }
 
-        private sealed class StateSnapshot
+        private sealed partial class StateSnapshot
         {
             private sealed class PLPData
             {
@@ -4232,6 +4232,15 @@ namespace Microsoft.Data.SqlClient
 #endif
                 _snapshotInBuffList = packetData;
                 _snapshotInBuffCount++;
+
+                if (SqlDataReader.Experimental_TdsParserStateObject_EnsureEnoughDataForPlp)
+                {
+                    _inBytesReadTotal += (ulong)_snapshotInBuffList.Read;
+                    if (_snapshotInBuffList.Read > 2 * SqlDataReader.Experimental_PlpHeaderSize)
+                    {
+                        _inBytesReadTotal -= SqlDataReader.Experimental_PlpHeaderSize;
+                    }
+                }
             }
 
             internal bool Replay()
@@ -4335,6 +4344,11 @@ namespace Microsoft.Data.SqlClient
 
             internal void Clear()
             {
+                if (SqlDataReader.Experimental_TdsParserStateObject_EnsureEnoughDataForPlp)
+                {
+                    _inBytesReadTotal = 0;
+                }
+
                 PacketData packet = _snapshotInBuffList;
                 _snapshotInBuffList = null;
                 _snapshotInBuffCount = 0;

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
@@ -8,8 +9,6 @@ namespace Microsoft.Data.SqlClient
 {
     partial class TdsParserStateObject
     {
-        static bool Experimental => SqlDataReader.Experimental;
-
         /// <summary>
         /// Same as <see cref="ReadSni"/>, but returns true instead of false, if <see cref="ReadAsync"/> succeeds synchronously.
         /// </summary>
@@ -158,6 +157,95 @@ namespace Microsoft.Data.SqlClient
             }
 
             return result;
+        }
+
+
+        /// <summary>
+        /// Returns true if there are enough packets in the snapshot to read the current PLP data. Otherwise it requests more packets from the driver.
+        /// If there are not enough packets in the snapshot:
+        /// 1. Try to read as many packets as possible without blocking, pushing them in the snapshot.
+        /// 2. Read one more packet, starting an asynchronous operation.
+        /// 3. Return false to the caller, resulting in the read operation being continued when the asynchronous operation completes (e.g. when another packet arrives).
+        /// Notes:
+        /// 1. This implementation isn't 100% correct, it should restore the state of the snapshots in case it manages to read enough packets without blocking, 
+        ///     returning true to the caller. Currently it returns false and the operation is retried, in order to replay reset and replay the snapshot properly.
+        /// </summary>
+        /// <returns></returns>
+        internal bool EnsureEnoughDataForPlp()
+        {
+            if (_syncOverAsync)
+            {
+                // There is always enough data available for sync mode (because we block until it is).
+                return true;
+            }
+
+            if (_longlen == TdsEnums.SQL_PLP_NULL 
+                || _longlen == TdsEnums.SQL_PLP_UNKNOWNLEN 
+                || _snapshot == null)
+            {
+                // We don't know how to handle these cases, let the caller firgure it out.
+                return true;
+            }
+
+            Debug.Assert(_inBytesUsed >= SqlDataReader.Experimental_PlpHeaderSize, "The packet header and PLP prefix should have been read.");
+
+            ulong inBytesUsed = (ulong)_inBytesUsed - SqlDataReader.Experimental_PlpHeaderSize;
+
+            if (_longlen <= _snapshot._inBytesReadTotal - inBytesUsed)
+            {
+                // We know there is enough data to read the PLP data, let the caller continue.
+                return true;
+            }
+
+            // Replay all packets, because we want to read more data now.
+            _snapshot.ReplayAll();
+
+            // Try reading packets without blocking.
+            while (TryReadNetworkPacket())
+            {
+                if (_longlen <= _snapshot._inBytesReadTotal - inBytesUsed)
+                {
+                    // Return false to force the caller to retry the operation (so that the snapshot gets reset and replayed).
+                    // A better solution would be to reset the snapshot here (we need to keep a "checkpoint" before calling ReplayAll to do this).
+                    // If the snapshot was reset here, we could return true to the caller.
+
+
+                    // TryReadSni sets _networkPacketTaskSource to null if it returns true
+                    // We have to create a new completed _networkPacketTaskSource in order for the caller
+                    // to retry after returning false from here.
+
+                    _networkPacketTaskSource = new TaskCompletionSource<object>();
+                    _networkPacketTaskSource.TrySetResult(null);
+
+                    return false;
+                }
+            }
+
+            // There is not enough data available right now, the caller has to wait for a callback from the driver before retrying.
+            return false;
+        }
+
+
+        partial class StateSnapshot
+        {
+            internal ulong _inBytesReadTotal;
+
+            /// <summary>
+            /// Same as calling Replay() repeatedly until it returns false, but a lot faster.
+            /// Benchmarks show that traversing the liked-list implementation was a major performance hit (when having 1000+ packets buffered).
+            /// This indicates memory may be getting highly fragmented.
+            /// You can try replacing this method's body with Replay in a loop to see the difference.
+            /// </summary>
+            public void ReplayAll()
+            {
+                if (_snapshotInBuffCurrent < _snapshotInBuffCount)
+                {
+                    _stateObj._inBuff = _snapshotInBuffList.Buffer;
+                    _stateObj._inBytesUsed = 0;
+                    _stateObj._inBytesRead = _snapshotInBuffList.Read;
+                    _snapshotInBuffCurrent = _snapshotInBuffCount;
+                }
+            }
         }
     }
 }
