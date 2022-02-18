@@ -228,6 +228,7 @@ namespace Microsoft.Data.SqlClient
 
         partial class StateSnapshot
         {
+            readonly IList<PacketData> _bufferedPackets = new List<PacketData>();
             internal ulong _inBytesReadTotal;
 
             /// <summary>
@@ -244,6 +245,56 @@ namespace Microsoft.Data.SqlClient
                     _stateObj._inBytesUsed = 0;
                     _stateObj._inBytesRead = _snapshotInBuffList.Read;
                     _snapshotInBuffCurrent = _snapshotInBuffCount;
+                }
+            }
+
+
+            internal bool ReplayUsingList()
+            {
+                if (_snapshotInBuffCurrent < _snapshotInBuffCount)
+                {
+                    int reverseIndex = _snapshotInBuffCount - _snapshotInBuffCurrent; // 1-based, reverse index
+                    int forwardIndex = _bufferedPackets.Count - reverseIndex; // 0-based
+
+                    PacketData currentPacket = _bufferedPackets[forwardIndex];
+                 
+                    _stateObj._inBuff = currentPacket.Buffer;
+                    _stateObj._inBytesUsed = 0;
+                    _stateObj._inBytesRead = currentPacket.Read;
+                    _snapshotInBuffCurrent++;
+                    return true;
+                }
+
+                return false;
+            }
+
+            void PushBufferExtra()
+            {
+                if (SqlDataReader.Experimental_TdsParserStateObject_ReplayUsingList)
+                {
+                    _bufferedPackets.Add(_snapshotInBuffList);
+                }
+
+                if (SqlDataReader.Experimental_TdsParserStateObject_EnsureEnoughDataForPlp)
+                {
+                    _inBytesReadTotal += (ulong)_snapshotInBuffList.Read;
+                    if (_snapshotInBuffList.Read > 2 * SqlDataReader.Experimental_PlpHeaderSize)
+                    {
+                        _inBytesReadTotal -= SqlDataReader.Experimental_PlpHeaderSize;
+                    }
+                }
+            }
+
+            void ClearExtra()
+            {
+                if (SqlDataReader.Experimental_TdsParserStateObject_EnsureEnoughDataForPlp)
+                {
+                    _inBytesReadTotal = 0;
+                }
+
+                if (SqlDataReader.Experimental_TdsParserStateObject_ReplayUsingList)
+                {
+                    _bufferedPackets.Clear();
                 }
             }
         }

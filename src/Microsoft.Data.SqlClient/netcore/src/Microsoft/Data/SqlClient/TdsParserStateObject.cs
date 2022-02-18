@@ -4233,18 +4233,16 @@ namespace Microsoft.Data.SqlClient
                 _snapshotInBuffList = packetData;
                 _snapshotInBuffCount++;
 
-                if (SqlDataReader.Experimental_TdsParserStateObject_EnsureEnoughDataForPlp)
-                {
-                    _inBytesReadTotal += (ulong)_snapshotInBuffList.Read;
-                    if (_snapshotInBuffList.Read > 2 * SqlDataReader.Experimental_PlpHeaderSize)
-                    {
-                        _inBytesReadTotal -= SqlDataReader.Experimental_PlpHeaderSize;
-                    }
-                }
+                PushBufferExtra();
             }
 
             internal bool Replay()
             {
+                if (SqlDataReader.Experimental_TdsParserStateObject_ReplayUsingList)
+                {
+                    return ReplayUsingList();
+                }
+
                 if (_snapshotInBuffCurrent < _snapshotInBuffCount)
                 {
                     PacketData next = _snapshotInBuffList;
@@ -4344,10 +4342,7 @@ namespace Microsoft.Data.SqlClient
 
             internal void Clear()
             {
-                if (SqlDataReader.Experimental_TdsParserStateObject_EnsureEnoughDataForPlp)
-                {
-                    _inBytesReadTotal = 0;
-                }
+                ClearExtra();
 
                 PacketData packet = _snapshotInBuffList;
                 _snapshotInBuffList = null;
