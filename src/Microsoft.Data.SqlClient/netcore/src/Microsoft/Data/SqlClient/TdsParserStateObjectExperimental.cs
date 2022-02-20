@@ -226,10 +226,202 @@ namespace Microsoft.Data.SqlClient
         }
 
 
+        internal bool TryReadPlpColumn(out byte[] buffer, out int bufferLength)
+        {
+            buffer = Array.Empty<byte>();
+            bufferLength = 0;
+
+            if (_snapshot._plpExtra == null)
+            {
+                _snapshot._plpExtra = new StateSnapshot.PlpExtra();
+            }
+            else
+            {
+                _snapshot.RestorePlpExtra();
+
+                if (!TryPrepareBuffer())
+                {
+                    return false;
+                }                
+            }
+
+            StateSnapshot.PlpExtra extra = _snapshot._plpExtra;
+
+            bool finished = TryReadPlpBytes_Extra(ref extra._plpBuff, extra._plpBuffBytesUsed, int.MaxValue, out int totalBytesRead);
+
+            extra._plpBuffBytesUsed += totalBytesRead;
+
+            extra.Check();
+
+
+            _snapshot.SavePlpExtra();
+
+            buffer = extra._plpBuff;
+            bufferLength = extra._plpBuffBytesUsed;
+
+            if (finished)
+            {
+                extra.Reset();
+                _snapshot._plpExtra = null;
+            }
+
+            return finished;
+        }
+
+        // Reads the requested number of bytes from a plp data stream, or the entire data if
+        // requested length is -1 or larger than the actual length of data. First call to this method
+        //  should be preceeded by a call to ReadPlpLength or ReadDataLength.
+        // Returns the actual bytes read.
+        // NOTE: This method must be retriable WITHOUT replaying a snapshot
+        // Every time you call this method increment the offset and decrease len by the value of totalBytesRead
+        internal bool TryReadPlpBytes_Extra(ref byte[] buff, int offset, int len, out int totalBytesRead)
+        {
+            int bytesRead;
+            int bytesLeft;
+            ulong ignored;
+
+            if (_longlen == 0)
+            {
+                Debug.Assert(_longlenleft == 0);
+                if (buff == null)
+                {
+                    buff = Array.Empty<byte>();
+                }
+
+                AssertValidState();
+                totalBytesRead = 0;
+                return true;       // No data
+            }
+
+            Debug.Assert(_longlen != TdsEnums.SQL_PLP_NULL, "Out of sync plp read request");
+            // Debug.Assert((buff == null && offset == 0) || (buff.Length >= offset + len), "Invalid length sent to ReadPlpBytes()!");
+
+            bytesLeft = len;
+
+            // If total length is known up front, allocate the whole buffer in one shot instead of realloc'ing and copying over each time
+            if (buff == null && _longlen != TdsEnums.SQL_PLP_UNKNOWNLEN)
+            {
+                if (_snapshot != null)
+                {
+                    // if there is a snapshot and it contains a stored plp buffer take it
+                    // and try to use it if it is the right length
+                    buff = _snapshot._plpBuffer;
+                    _snapshot._plpBuffer = null;
+                }
+
+                if ((ulong)(buff?.Length ?? 0) != _longlen)
+                {
+                    // if the buffer is null or the wrong length create one to use
+                    buff = new byte[(int)Math.Min((int)_longlen, len)];
+                }
+            }
+
+            if (_longlenleft == 0)
+            {
+                if (!TryReadPlpLength(false, out ignored))
+                {
+                    totalBytesRead = 0;
+                    return false;
+                }
+                if (_longlenleft == 0)
+                { // Data read complete
+                    totalBytesRead = 0;
+                    return true;
+                }
+            }
+
+            if (buff == null)
+            {
+                buff = new byte[_longlenleft];
+            }
+
+            totalBytesRead = 0;
+
+            while (bytesLeft > 0)
+            {
+                int bytesToRead = (int)Math.Min(_longlenleft, (ulong)bytesLeft);
+                if (buff.Length < (offset + bytesToRead))
+                {
+                    // Grow the array
+                    Array.Resize(ref buff, offset + bytesToRead);
+                }
+
+                bool result = TryReadByteArray(buff.AsSpan(offset), bytesToRead, out bytesRead);
+
+                Debug.Assert(bytesRead <= bytesLeft, "Read more bytes than we needed");
+                Debug.Assert((ulong)bytesRead <= _longlenleft, "Read more bytes than is available");
+
+                bytesLeft -= bytesRead;
+                offset += bytesRead;
+                totalBytesRead += bytesRead;
+                _longlenleft -= (ulong)bytesRead;
+                if (!result)
+                {
+                    if (_snapshot != null)
+                    {
+                        // a partial read has happened so store the target buffer in the snapshot
+                        // so it can be re-used when another packet arrives and we read again
+                        _snapshot._plpBuffer = buff;
+                    }
+                    return false;
+                }
+
+                if (_longlenleft == 0)
+                {
+                    // Read the next chunk or cleanup state if hit the end
+                    if (!TryReadPlpLength(false, out ignored))
+                    {
+                        if (_snapshot != null)
+                        {
+                            // a partial read has happened so store the target buffer in the snapshot
+                            // so it can be re-used when another packet arrives and we read again
+                            _snapshot._plpBuffer = buff;
+                        }
+                        return false;
+                    }
+                }
+
+                AssertValidState();
+
+                // Catch the point where we read the entire plp data stream and clean up state
+                if (_longlenleft == 0)   // Data read complete
+                    break;
+            }
+            return true;
+        }
+
+
         partial class StateSnapshot
         {
             readonly IList<PacketData> _bufferedPackets = new List<PacketData>();
             internal ulong _inBytesReadTotal;
+            internal PlpExtra _plpExtra;
+
+            internal void RestorePlpExtra()
+            {
+                _snapshotInBuffCurrent = _plpExtra._snapshotInBuffCurrent;
+
+                _stateObj._inBuff = _plpExtra._snapshotInBuff;
+                _stateObj._inBytesRead = _plpExtra._snapshotInBytesRead;
+                _stateObj._inBytesUsed = _plpExtra._snapshotInBytesUsed;
+                _stateObj._inBytesPacket = _plpExtra._snapshotInBytesPacket;
+
+                _stateObj._longlen = _plpExtra._longlen;
+                _stateObj._longlenleft = _plpExtra._longlenleft;
+            }
+
+            internal void SavePlpExtra()
+            {
+                _plpExtra._snapshotInBuffCurrent = _snapshotInBuffCount;
+
+                _plpExtra._snapshotInBuff = _stateObj._inBuff;
+                _plpExtra._snapshotInBytesRead = _stateObj._inBytesRead;
+                _plpExtra._snapshotInBytesUsed = _stateObj._inBytesUsed;
+                _plpExtra._snapshotInBytesPacket = _stateObj._inBytesPacket;
+
+                _plpExtra._longlen = _stateObj._longlen;
+                _plpExtra._longlenleft = _stateObj._longlenleft;
+            }
 
             /// <summary>
             /// Same as calling Replay() repeatedly until it returns false, but a lot faster.
@@ -287,6 +479,11 @@ namespace Microsoft.Data.SqlClient
 
             void ClearExtra()
             {
+                if (SqlDataReader.Experimental_TdsParserStateObject_TryReadSqlStringValuePlp)
+                {
+                    _plpExtra = null;
+                }
+
                 if (SqlDataReader.Experimental_TdsParserStateObject_EnsureEnoughDataForPlp)
                 {
                     _inBytesReadTotal = 0;
@@ -295,6 +492,30 @@ namespace Microsoft.Data.SqlClient
                 if (SqlDataReader.Experimental_TdsParserStateObject_ReplayUsingList)
                 {
                     _bufferedPackets.Clear();
+                }
+            }
+
+
+            internal class PlpExtra
+            {
+                internal byte[] _plpBuff;
+                internal int _plpBuffBytesUsed;
+                internal byte[] _snapshotInBuff;
+                internal int _snapshotInBuffCurrent;
+                internal int _snapshotInBytesRead;
+                internal int _snapshotInBytesUsed;
+                internal int _snapshotInBytesPacket;
+                internal ulong _longlen;
+                internal ulong _longlenleft;
+
+                internal void Reset()
+                {
+                    _plpBuffBytesUsed = 0;
+                    _snapshotInBuffCurrent = 0;
+                    _snapshotInBytesUsed = 0;
+                    _snapshotInBytesPacket = 0;
+                    _longlen = 0;
+                    _longlenleft = 0;
                 }
             }
         }

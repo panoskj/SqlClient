@@ -92,5 +92,50 @@ namespace Microsoft.Data.SqlClient
 
             return true;
         }
+
+        /// <summary>
+        /// Same as <see cref="TryReadSqlStringValue"/>, but also checks if there is enough data in the snapshot before trying to read PLP data in async mode.
+        /// </summary>
+        /// <param name="value"></param>
+        /// <param name="type"></param>
+        /// <param name="length"></param>
+        /// <param name="encoding"></param>
+        /// <param name="isPlp"></param>
+        /// <param name="stateObj"></param>
+        /// <returns></returns>
+        private bool TryReadSqlStringValuePlp(SqlBuffer value, byte type, int length, Encoding encoding, bool isPlp, TdsParserStateObject stateObj)
+        {
+            Debug.Assert(!stateObj._syncOverAsync && isPlp, "This method should only be called for PLP columns in asynchronous mode.");
+
+            switch (type)
+            {
+                case TdsEnums.SQLCHAR:
+                case TdsEnums.SQLBIGCHAR:
+                case TdsEnums.SQLVARCHAR:
+                case TdsEnums.SQLBIGVARCHAR:
+                case TdsEnums.SQLTEXT:
+                    encoding ??= _defaultEncoding;
+                    break;
+
+                case TdsEnums.SQLNCHAR:
+                case TdsEnums.SQLNVARCHAR:
+                case TdsEnums.SQLNTEXT:
+                    encoding = Encoding.Unicode;
+                    break;
+
+                default:
+                    Debug.Fail("Unknown tds type for SqlString!" + type.ToString(CultureInfo.InvariantCulture));
+                    break;
+            }
+
+            if (stateObj.TryReadPlpColumn(out byte[] buffer, out int bufferLength))
+            {
+                value.SetToString(encoding.GetString(buffer, 0, bufferLength));
+
+                return true;
+            }
+
+            return false;
+        }
     }
 }

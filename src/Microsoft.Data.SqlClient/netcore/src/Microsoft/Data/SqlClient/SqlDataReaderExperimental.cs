@@ -26,6 +26,12 @@ namespace Microsoft.Data.SqlClient
         public static bool Experimental_TdsParserStateObject_ReplayUsingList { get; set; }
 
         /// <summary>
+        /// This flag is for enabling experimental async performance fixes.
+        /// Makes it easier to run benchmarks.
+        /// </summary>
+        public static bool Experimental_TdsParserStateObject_TryReadSqlStringValuePlp { get; set; }
+
+        /// <summary>
         /// Header size per packet, overestimating this value results in trying to read more packets than possible, hanging the client.
         /// This flag is meant for benchmarking and should be set to 0 to ensure the code is 100% correct. A value of 12 works for my tests.
         /// </summary>

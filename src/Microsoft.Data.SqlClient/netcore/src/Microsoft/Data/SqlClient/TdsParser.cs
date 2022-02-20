@@ -5561,6 +5561,10 @@ namespace Microsoft.Data.SqlClient
 
         private bool TryReadSqlStringValue(SqlBuffer value, byte type, int length, Encoding encoding, bool isPlp, TdsParserStateObject stateObj)
         {
+            if (!stateObj._syncOverAsync && isPlp && SqlDataReader.Experimental_TdsParserStateObject_TryReadSqlStringValuePlp)
+            {
+                return TryReadSqlStringValuePlp(value, type, length, encoding, isPlp, stateObj);
+            }
             if (SqlDataReader.Experimental_TdsParserStateObject_EnsureEnoughDataForPlp)
             {
                 return TryReadSqlStringValueExperimental(value, type, length, encoding, isPlp, stateObj);
