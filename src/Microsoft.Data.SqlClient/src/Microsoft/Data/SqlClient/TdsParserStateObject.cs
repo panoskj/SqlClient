@@ -2791,5 +2791,92 @@ namespace Microsoft.Data.SqlClient
                 });
             }
         }
+
+        public void WriteAsyncCallback(IntPtr key, PacketHandle packet, uint sniError)
+        { // Key never used.
+            RemovePacketFromPendingList(packet);
+            try
+            {
+                if (sniError != TdsEnums.SNI_SUCCESS)
+                {
+#if NETFRAMEWORK
+                    SqlClientEventSource.Log.TryTraceEvent("<sc.TdsParser.WriteAsyncCallback|Info> write async returned error code {0}", (int)sniError);
+#else
+                    SqlClientEventSource.Log.TryTraceEvent("TdsParserStateObject.WriteAsyncCallback | Info | State Object Id {0}, Write async returned error code {1}", _objectID, (int)sniError);
+#endif
+                    try
+                    {
+                        AddError(_parser.ProcessSNIError(this));
+                        ThrowExceptionAndWarning(asyncClose: true);
+                    }
+                    catch (Exception e)
+                    {
+                        var writeCompletionSource = _writeCompletionSource;
+                        if (writeCompletionSource != null)
+                        {
+                            writeCompletionSource.TrySetException(e);
+                        }
+                        else
+                        {
+                            _delayedWriteAsyncCallbackException = e;
+
+                            // Ensure that _delayedWriteAsyncCallbackException is set before checking _writeCompletionSource
+                            Interlocked.MemoryBarrier();
+
+                            // Double check that _writeCompletionSource hasn't been created in the meantime
+                            writeCompletionSource = _writeCompletionSource;
+                            if (writeCompletionSource != null)
+                            {
+                                var delayedException = Interlocked.Exchange(ref _delayedWriteAsyncCallbackException, null);
+                                if (delayedException != null)
+                                {
+                                    writeCompletionSource.TrySetException(delayedException);
+                                }
+                            }
+                        }
+
+                        return;
+                    }
+                }
+                else
+                {
+                    _lastSuccessfulIOTimer._value = DateTime.UtcNow.Ticks;
+                }
+            }
+            finally
+            {
+#if DEBUG
+                if (SqlCommand.DebugForceAsyncWriteDelay > 0)
+                {
+                    new Timer(obj =>
+                    {
+                        Interlocked.Decrement(ref _asyncWriteCount);
+                        var writeCompletionSource = _writeCompletionSource;
+                        if (_asyncWriteCount == 0 && writeCompletionSource != null)
+                        {
+                            writeCompletionSource.TrySetResult(null);
+                        }
+                    }, null, SqlCommand.DebugForceAsyncWriteDelay, Timeout.Infinite);
+                }
+                else
+                {
+#else
+                {
+#endif
+                    Interlocked.Decrement(ref _asyncWriteCount);
+                }
+            }
+#if DEBUG
+            if (SqlCommand.DebugForceAsyncWriteDelay > 0)
+            {
+                return;
+            }
+#endif
+            var completionSource = _writeCompletionSource;
+            if (_asyncWriteCount == 0 && completionSource != null)
+            {
+                completionSource.TrySetResult(null);
+            }
+        }
     }
 }
