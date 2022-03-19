@@ -406,12 +406,12 @@ namespace Microsoft.Data.SqlClient
             _allowObjectID = objectID;
         }
 
+        #region These overloads should be removed when both TdsParserStateObject and TdsParser have been merged.
+
         ///////////////////////////////////////
         // Buffer read methods - data values //
         ///////////////////////////////////////
-
-        #region These overloads should be removed when both TdsParserStateObject and TdsParser have been merged.
-
+        
         // Takes a byte array, an offset, and a len and fills the array from the offset to len number of
         // bytes from the in buffer.
         public bool TryReadByteArray(byte[] buff, int offset, int len)
@@ -429,107 +429,6 @@ namespace Microsoft.Data.SqlClient
         }
 
         #endregion
-
-        // Reads the requested number of bytes from a plp data stream, or the entire data if
-        // requested length is -1 or larger than the actual length of data. First call to this method
-        //  should be preceeded by a call to ReadPlpLength or ReadDataLength.
-        // Returns the actual bytes read.
-        // NOTE: This method must be retriable WITHOUT replaying a snapshot
-        // Every time you call this method increment the offst and decrease len by the value of totalBytesRead
-        internal bool TryReadPlpBytes(ref byte[] buff, int offst, int len, out int totalBytesRead)
-        {
-            int bytesRead = 0;
-            int bytesLeft;
-            byte[] newbuf;
-            ulong ignored;
-
-            if (_longlen == 0)
-            {
-                Debug.Assert(_longlenleft == 0);
-                if (buff == null)
-                {
-                    buff = new byte[0];
-                }
-
-                AssertValidState();
-                totalBytesRead = 0;
-                return true;       // No data
-            }
-
-            Debug.Assert((_longlen != TdsEnums.SQL_PLP_NULL),
-                    "Out of sync plp read request");
-
-            Debug.Assert((buff == null && offst == 0) || (buff.Length >= offst + len), "Invalid length sent to ReadPlpBytes()!");
-            bytesLeft = len;
-
-            // If total length is known up front, allocate the whole buffer in one shot instead of realloc'ing and copying over each time
-            if (buff == null && _longlen != TdsEnums.SQL_PLP_UNKNOWNLEN)
-            {
-                buff = new byte[(int)Math.Min((int)_longlen, len)];
-            }
-
-            if (_longlenleft == 0)
-            {
-                if (!TryReadPlpLength(false, out ignored))
-                {
-                    totalBytesRead = 0;
-                    return false;
-                }
-                if (_longlenleft == 0)
-                { // Data read complete
-                    totalBytesRead = 0;
-                    return true;
-                }
-            }
-
-            if (buff == null)
-            {
-                buff = new byte[_longlenleft];
-            }
-
-            totalBytesRead = 0;
-
-            while (bytesLeft > 0)
-            {
-                int bytesToRead = (int)Math.Min(_longlenleft, (ulong)bytesLeft);
-                if (buff.Length < (offst + bytesToRead))
-                {
-                    // Grow the array
-                    newbuf = new byte[offst + bytesToRead];
-                    Buffer.BlockCopy(buff, 0, newbuf, 0, offst);
-                    buff = newbuf;
-                }
-
-                bool result = TryReadByteArray(buff, offst, bytesToRead, out bytesRead);
-                Debug.Assert(bytesRead <= bytesLeft, "Read more bytes than we needed");
-                Debug.Assert((ulong)bytesRead <= _longlenleft, "Read more bytes than is available");
-
-                bytesLeft -= bytesRead;
-                offst += bytesRead;
-                totalBytesRead += bytesRead;
-                _longlenleft -= (ulong)bytesRead;
-                if (!result)
-                {
-                    return false;
-                }
-
-                if (_longlenleft == 0)
-                { // Read the next chunk or cleanup state if hit the end
-                    if (!TryReadPlpLength(false, out ignored))
-                    {
-                        return false;
-                    }
-                }
-
-                AssertValidState();
-
-                // Catch the point where we read the entire plp data stream and clean up state
-                if (_longlenleft == 0)   // Data read complete
-                    break;
-            }
-            return true;
-        }
-
 
         /////////////////////////////////////////
         // Value Skip Logic                    //
