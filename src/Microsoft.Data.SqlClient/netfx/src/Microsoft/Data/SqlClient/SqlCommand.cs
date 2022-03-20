@@ -1282,14 +1282,14 @@ namespace Microsoft.Data.SqlClient
                                     TdsParserStateObject stateObj = _stateObj;
                                     if (null != stateObj)
                                     {
-                                        stateObj.Cancel(ObjectID);
+                                        stateObj.Cancel(this);
                                     }
                                     else
                                     {
                                         SqlDataReader reader = connection.FindLiveReader(this);
                                         if (reader != null)
                                         {
-                                            reader.Cancel(ObjectID);
+                                            reader.Cancel(this);
                                         }
                                     }
                                 }
@@ -5974,7 +5974,7 @@ namespace Microsoft.Data.SqlClient
             }
 
             TdsParserStateObject stateObj = parser.GetSession(this);
-            stateObj.StartSession(ObjectID);
+            stateObj.StartSession(this);
 
             _stateObj = stateObj;
 
