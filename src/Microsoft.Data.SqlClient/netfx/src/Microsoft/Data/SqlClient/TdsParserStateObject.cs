@@ -213,30 +213,6 @@ namespace Microsoft.Data.SqlClient
             }
         }
 
-        #region These overloads should be removed when both TdsParserStateObject and TdsParser have been merged.
-
-        ///////////////////////////////////////
-        // Buffer read methods - data values //
-        ///////////////////////////////////////
-        
-        // Takes a byte array, an offset, and a len and fills the array from the offset to len number of
-        // bytes from the in buffer.
-        public bool TryReadByteArray(byte[] buff, int offset, int len)
-        {
-            Span<byte> span = buff != null ? buff.AsSpan(offset) : default;
-            return TryReadByteArray(span, len, out int _);
-        }
-
-        // NOTE: This method must be retriable WITHOUT replaying a snapshot
-        // Every time you call this method increment the offset and decrease len by the value of totalRead
-        public bool TryReadByteArray(byte[] buff, int offset, int len, out int totalRead)
-        {
-            Span<byte> span = buff != null ? buff.AsSpan(offset) : default;
-            return TryReadByteArray(span, len, out totalRead);
-        }
-
-        #endregion
-
         /////////////////////////////////////////
         // Network/Packet Reading & Processing //
         /////////////////////////////////////////

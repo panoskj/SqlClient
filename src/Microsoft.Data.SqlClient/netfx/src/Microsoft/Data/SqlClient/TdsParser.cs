@@ -1162,7 +1162,7 @@ namespace Microsoft.Data.SqlClient
             byte[] payload = new byte[_physicalStateObj._inBytesPacket];
 
             Debug.Assert(_physicalStateObj._syncOverAsync, "Should not attempt pends in a synchronous call");
-            result = _physicalStateObj.TryReadByteArray(payload, 0, payload.Length);
+            result = _physicalStateObj.TryReadByteArray(payload, payload.Length);
             if (!result)
             { throw SQL.SynchronousCallMayNotPend(); }
 
@@ -3188,7 +3188,7 @@ namespace Microsoft.Data.SqlClient
                             return false;
                         }
                         env.newBinValue = new byte[env.newLength];
-                        if (!stateObj.TryReadByteArray(env.newBinValue, 0, env.newLength))
+                        if (!stateObj.TryReadByteArray(env.newBinValue, env.newLength))
                         { // read new value with 4 byte length
                             return false;
                         }
@@ -3283,7 +3283,7 @@ namespace Microsoft.Data.SqlClient
             }
             env.newLength = byteLength;
             env.newBinValue = new byte[env.newLength];
-            if (!stateObj.TryReadByteArray(env.newBinValue, 0, env.newLength))
+            if (!stateObj.TryReadByteArray(env.newBinValue, env.newLength))
             {
                 return false;
             }
@@ -3293,7 +3293,7 @@ namespace Microsoft.Data.SqlClient
             }
             env.oldLength = byteLength;
             env.oldBinValue = new byte[env.oldLength];
-            if (!stateObj.TryReadByteArray(env.oldBinValue, 0, env.oldLength))
+            if (!stateObj.TryReadByteArray(env.oldBinValue, env.oldLength))
             {
                 return false;
             }
@@ -3593,7 +3593,7 @@ namespace Microsoft.Data.SqlClient
                     byte[] data = new byte[dataLen];
                     if (dataLen > 0)
                     {
-                        if (!stateObj.TryReadByteArray(data, 0, checked((int)dataLen)))
+                        if (!stateObj.TryReadByteArray(data, checked((int)dataLen)))
                         {
                             return false;
                         }
@@ -3981,7 +3981,7 @@ namespace Microsoft.Data.SqlClient
                 }
                 if (buffer != null)
                 {
-                    if (!stateObj.TryReadByteArray(buffer, 0, stateLen))
+                    if (!stateObj.TryReadByteArray(buffer, stateLen))
                     {
                         return false;
                     }
@@ -4019,7 +4019,7 @@ namespace Microsoft.Data.SqlClient
             }
 
             byte[] b = new byte[TdsEnums.VERSION_SIZE];
-            if (!stateObj.TryReadByteArray(b, 0, b.Length))
+            if (!stateObj.TryReadByteArray(b, b.Length))
             {
                 return false;
             }
@@ -4168,7 +4168,7 @@ namespace Microsoft.Data.SqlClient
                 // read the rest of the token
                 byte[] tokenData = new byte[tokenLen];
                 int totalRead = 0;
-                bool successfulRead = stateObj.TryReadByteArray(tokenData, 0, tokenLen, out totalRead);
+                bool successfulRead = stateObj.TryReadByteArray(tokenData, tokenLen, out totalRead);
                 if (SqlClientEventSource.Log.IsAdvancedTraceOn())
                 {
                     SqlClientEventSource.Log.AdvancedTraceEvent("<sc.TdsParser.TryProcessFedAuthInfo|ADV> Read rest of FEDAUTHINFO token stream: {0}", BitConverter.ToString(tokenData, 0, totalRead));
@@ -5173,7 +5173,7 @@ namespace Microsoft.Data.SqlClient
 
             // Read the key MD Version
             byte[] keyMDVersion = new byte[8];
-            if (!stateObj.TryReadByteArray(keyMDVersion, 0, 8))
+            if (!stateObj.TryReadByteArray(keyMDVersion, 8))
             {
                 return false;
             }
@@ -5206,7 +5206,7 @@ namespace Microsoft.Data.SqlClient
                 encryptedCek = new byte[length];
 
                 // Read the actual encrypted CEK
-                if (!stateObj.TryReadByteArray(encryptedCek, 0, length))
+                if (!stateObj.TryReadByteArray(encryptedCek, length))
                 {
                     return false;
                 }
@@ -6746,7 +6746,7 @@ namespace Microsoft.Data.SqlClient
                     {
                         //Debug.Assert(length > 0 && length < (long)(Int32.MaxValue), "Bad length for column");
                         b = new byte[length];
-                        if (!stateObj.TryReadByteArray(b, 0, length))
+                        if (!stateObj.TryReadByteArray(b, length))
                         {
                             return false;
                         }
@@ -6832,7 +6832,7 @@ namespace Microsoft.Data.SqlClient
         {
             byte[] datetimeBuffer = new byte[length];
 
-            if (!stateObj.TryReadByteArray(datetimeBuffer, 0, length))
+            if (!stateObj.TryReadByteArray(datetimeBuffer, length))
             {
                 return false;
             }
@@ -7053,7 +7053,7 @@ namespace Microsoft.Data.SqlClient
                         {
                             b = new byte[GUID_SIZE];
                         }
-                        if (!stateObj.TryReadByteArray(b, 0, length))
+                        if (!stateObj.TryReadByteArray(b, length))
                         {
                             return false;
                         }
@@ -7071,7 +7071,7 @@ namespace Microsoft.Data.SqlClient
                         // Note: Better not come here with plp data!!
                         Debug.Assert(length <= TdsEnums.MAXSIZE);
                         byte[] b = new byte[length];
-                        if (!stateObj.TryReadByteArray(b, 0, length))
+                        if (!stateObj.TryReadByteArray(b, length))
                         {
                             return false;
                         }
@@ -9302,7 +9302,7 @@ namespace Microsoft.Data.SqlClient
 
             // read SSPI data received from server
             Debug.Assert(_physicalStateObj._syncOverAsync, "Should not attempt pends in a synchronous call");
-            bool result = _physicalStateObj.TryReadByteArray(receivedBuff, 0, receivedLength);
+            bool result = _physicalStateObj.TryReadByteArray(receivedBuff, receivedLength);
             if (!result)
             { throw SQL.SynchronousCallMayNotPend(); }
 
